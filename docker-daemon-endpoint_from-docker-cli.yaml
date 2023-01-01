@@ -1,0 +1,45 @@
+# Docker daemon location detection
+# 
+# Uses env var DOCKER_HOST by default:
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/cli/command/cli.go#L491
+#
+# Defines the "-H" option
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/cli/flags/common.go#L73
+#
+# Defines the default host on non-windows platforms
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/opts/hosts_unix.go#L7
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/opts/hosts.go#L20
+#
+# The function that does the job
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/cli/command/cli.go#L324
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/cli/command/cli.go#L498
+# https://github.com/docker/cli/blob/baeda1f82a10204ec5708d5fbba130ad76cfee49/opts/hosts.go#L51
+#
+# Order of precedence is:
+# * The value of the -H option, when provided
+# * The value of the DOCKER_HOST environment variable, when defined
+# * The hard-coded default value: `unix:///var/run/docker.sock`
+#
+# Fortunately since v19.03.0 the "context store" exists (added between v18.09.9
+# and v19.03.0 (at commit b34f340346f8042dc2968f412c490d301f2658b3)). So we can
+# run `docker context inspect default` and let the client describe the default
+# endpoint
+
+- name: "Get Docker daemon endpoint"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - context
+      - inspect
+  changed_when: false
+  check_mode: false
+  register: "__docker_context"
+  ignore_errors: true
+- name: "Set Docker client endpoints fact"
+  ansible.builtin.set_fact:
+    "docker_endpoints": "{{ __docker_context.stdout | from_json | community.general.json_query('[0].\"Endpoints\"') | dict2items | community.general.json_query('[*].{key: key, value: value.Host}') | items2dict }}"
+  when: "__docker_context.failed is sameas false"
+- name: Display Docker client endpoints
+  ansible.builtin.debug:
+    var: docker_endpoints
+    verbosity: 2

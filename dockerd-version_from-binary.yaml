@@ -1,0 +1,17 @@
+- name: "Get Docker daemon version"
+  ansible.builtin.command:
+    argv:
+      - dockerd
+      - --version
+  changed_when: false
+  check_mode: false
+  register: "__dockerd_version"
+  ignore_errors: true
+- name: "Set Docker daemon version fact"
+  ansible.builtin.set_fact:
+    "dockerd_version": "{{ __dockerd_version.stdout_lines[0] | regex_replace('^Docker version ([0-9]+(?:\\.[0-9]+(?:\\.[0-9]+))).*', '\\1') }}"
+  when: "__dockerd_version.failed is sameas false"
+- name: Display Docker daemon version
+  ansible.builtin.debug:
+    var: dockerd_version
+    verbosity: 2
